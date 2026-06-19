@@ -84,6 +84,26 @@ def calculate_target_date(config: dict) -> str | None:
     return None
 
 
+def calculate_next_week_target_dates(config: dict) -> list[str]:
+    """
+    Calculate configured booking weekdays for the next calendar week.
+    Example: for [2,3,4], returns next week's Wed/Thu/Fri dates.
+    """
+    schedule = config.get("schedule", {})
+    booking_days = sorted(schedule.get("booking_days", [2, 3, 4]))
+
+    today = datetime.now()
+    this_week_monday = today - timedelta(days=today.weekday())
+    next_week_monday = this_week_monday + timedelta(days=7)
+
+    target_dates = []
+    for weekday in booking_days:
+        target = next_week_monday + timedelta(days=weekday)
+        target_dates.append(target.strftime("%d %b %Y"))
+
+    return target_dates
+
+
 def parse_hidden_fields(html: str) -> dict:
     """Extract ASP.NET hidden form fields from HTML."""
     soup = BeautifulSoup(html, "html.parser")
@@ -831,15 +851,17 @@ def main():
         config = load_config(args.config)
         email, password = get_credentials(config)
 
-        booking_date = args.date
-        if not booking_date:
-            booking_date = calculate_target_date(config)
-            if not booking_date:
-                schedule = config.get("schedule", {})
-                days_ahead = schedule.get("days_ahead", 5)
-                target = datetime.now() + timedelta(days=days_ahead)
-                print(f"[*] Target date {target.strftime('%d %b %Y')} ({target.strftime('%A')}) is outside configured booking days.")
+        if args.date:
+            booking_dates = [args.date]
+        else:
+            booking_dates = calculate_next_week_target_dates(config)
+            if not booking_dates:
+                print("[*] No configured booking days found. Nothing to do.")
                 return 0
+
+        print("[*] Batch run will attempt dates:")
+        for d in booking_dates:
+            print(f"    - {d}")
 
         session = requests.Session()
         session.headers.update({
@@ -849,7 +871,13 @@ def main():
         if not login(session, email, password):
             return 1
 
-        return book_all_team(session, config, booking_date)
+        overall_rc = 0
+        for booking_date in booking_dates:
+            rc = book_all_team(session, config, booking_date)
+            if rc != 0:
+                overall_rc = rc
+
+        return overall_rc
 
     # Legacy single-booking mode
     email = args.email or input("Email: ")
