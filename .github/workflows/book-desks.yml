@@ -1,0 +1,33 @@
+name: Auto Book Desks
+
+on:
+  schedule:
+    # 05:00 IST = 23:30 UTC (previous day).
+    # With days_ahead=5 and booking_days=[Wed,Thu,Fri], running on IST Fri/Sat/Sun is enough.
+    # UTC equivalents at 23:30 are Thu/Fri/Sat.
+    - cron: "30 23 * * 4,5,6"
+  workflow_dispatch:
+
+jobs:
+  book:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run booking
+        env:
+          CB_EMAIL: ${{ secrets.CB_EMAIL }}
+          CB_PASSWORD: ${{ secrets.CB_PASSWORD }}
+        run: |
+          python book_desk.py --config config.yml

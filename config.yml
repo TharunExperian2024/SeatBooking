@@ -1,0 +1,38 @@
+# Cloudbooking Auto-Booking Configuration
+# =========================================
+
+credentials:
+  # Read from environment variables (for GitHub Actions secrets)
+  email_env: CB_EMAIL
+  password_env: CB_PASSWORD
+
+site:
+  site_group: "11"       # APAC
+  site: "55"             # Hyderabad
+  area: "131"            # Floor 4
+
+schedule:
+  # Days to book: 0=Mon, 1=Tue, 2=Wed, 3=Thu, 4=Fri, 5=Sat, 6=Sun
+  booking_days: [2, 3, 4]   # Wednesday, Thursday, Friday
+  days_ahead: 5             # Book 5 days into the future
+  start_time: "07:00"
+  end_time: "23:00"
+
+# Preferred desks in priority order (tried first before fallback to nearest)
+preferred_desks:
+  - "4293"
+  - "4294"
+  - "4295"
+  - "4296"
+
+# Team members to book for (in booking order)
+# contact: null means this is the logged-in user (no On Behalf Of needed)
+team:
+  - name: "Tharun Baliwada"
+    contact: null
+  - name: "Sandeep Nuka"
+    contact: "sandeep nuka"
+  - name: "Anvesh Tatapudi"
+    contact: "anvesh tatapudi"
+  - name: "Jyothiraam"
+    contact: "jyothiraam"
