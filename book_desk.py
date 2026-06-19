@@ -223,6 +223,56 @@ def scan_available_desks(date_response: str) -> dict:
     return desks
 
 
+def _normalize_name(text: str) -> str:
+    """Lowercase and normalize whitespace/punctuation for robust name matching."""
+    norm = re.sub(r"[^a-z0-9 ]+", " ", (text or "").lower())
+    return re.sub(r"\s+", " ", norm).strip()
+
+
+def _name_matches(occupant_name: str, candidate_name: str) -> bool:
+    """Token-based match tolerant to middle initials/order differences."""
+    occ = _normalize_name(occupant_name)
+    cand = _normalize_name(candidate_name)
+    if not occ or not cand:
+        return False
+
+    occ_tokens = set(occ.split())
+    cand_tokens = cand.split()
+    if not cand_tokens:
+        return False
+
+    # Single token: exact token presence. Multi-token: all tokens must be present.
+    if len(cand_tokens) == 1:
+        return cand_tokens[0] in occ_tokens
+    return all(tok in occ_tokens for tok in cand_tokens)
+
+
+def find_existing_booking_for_member(all_desks: dict, member_name: str = None, contact_name: str = None) -> tuple | None:
+    """
+    Find an existing booking for a member by matching occupant names in spot titles.
+    Returns (desk_number, internal_id, title) or None.
+    """
+    candidates = []
+    if member_name:
+        candidates.append(member_name)
+    if contact_name:
+        candidates.append(contact_name)
+
+    if not candidates:
+        return None
+
+    for desk_num, info in all_desks.items():
+        title = info.get("title", "")
+        # Occupied spots usually look like: "4.295 : Person Name"
+        if ":" not in title:
+            continue
+        occupant = title.split(":", 1)[1].strip()
+        if any(_name_matches(occupant, candidate) for candidate in candidates):
+            return (desk_num, info.get("id"), title)
+
+    return None
+
+
 def pick_best_desk(available_desks: dict, preferred: list = None, exclude_ids: set = None) -> tuple:
     """
     Pick the best available desk.
@@ -265,7 +315,8 @@ def pick_best_desk(available_desks: dict, preferred: list = None, exclude_ids: s
 def book_desk(session: requests.Session, booking_date: str, desk_id: str = None,
               desk_label: str = None, contact_name: str = None,
               preferred_desks: list = None, auto_select: bool = False,
-              exclude_ids: set = None, site_cfg: dict = None) -> tuple:
+              exclude_ids: set = None, site_cfg: dict = None,
+              member_name: str = None) -> tuple:
     """
     Book a desk after successful login.
     booking_date format: '16 Jun 2026'
@@ -369,6 +420,18 @@ def book_desk(session: requests.Session, booking_date: str, desk_id: str = None,
     all_desks = scan_available_desks(date_response)
     available_count = sum(1 for d in all_desks.values() if d["status"] == "Green")
     print(f"[*] Floor scan: {len(all_desks)} desks found, {available_count} available (Green)")
+
+    # Idempotency guard: if this member already has a booking on this date, skip creating another one.
+    existing = find_existing_booking_for_member(all_desks, member_name=member_name, contact_name=contact_name)
+    if existing:
+        existing_num, existing_id, existing_title = existing
+        if existing_num.isdigit() and len(existing_num) >= 2:
+            existing_label = f"Floor {existing_num[0]} - {existing_num[0]}.{existing_num[1:]}"
+        else:
+            existing_label = f"Desk {existing_id}"
+        print(f"[*] Existing booking detected for '{member_name or contact_name}': {existing_label} ({existing_title})")
+        print("[*] Skipping new booking attempt for this member/date.")
+        return (True, existing_id, "already_booked")
 
     if auto_select:
         # In auto-select mode, always pick the best available from preferred list
@@ -801,13 +864,15 @@ def book_all_team(session: requests.Session, config: dict, booking_date: str) ->
             auto_select=True,
             exclude_ids=consumed_ids,
             site_cfg=site_cfg,
+            member_name=name,
         )
 
         if success and used_id:
             consumed_ids.add(used_id)
             desk_num = next((k for k, v in DESK_MAP.items() if v == used_id), used_id)
             desk_pretty = f"4.{desk_num[1:]}" if desk_num in DESK_MAP else used_id
-            results.append((name, "Booked", desk_pretty))
+            status = "Already booked" if reason == "already_booked" else "Booked"
+            results.append((name, status, desk_pretty))
             continue
 
         if reason == "not_yet_open":

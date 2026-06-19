@@ -2,10 +2,8 @@ name: Auto Book Desks
 
 on:
   schedule:
-    # 05:00 IST = 23:30 UTC (previous day).
-    # With days_ahead=5 and booking_days=[Wed,Thu,Fri], running on IST Fri/Sat/Sun is enough.
-    # UTC equivalents at 23:30 are Thu/Fri/Sat.
-    - cron: "30 23 * * 4,5,6"
+    # 08:00 IST = 02:30 UTC.
+    - cron: "30 2 * * *"
   workflow_dispatch:
 
 jobs:
