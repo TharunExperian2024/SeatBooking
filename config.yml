@@ -15,8 +15,8 @@ schedule:
   # Days to book: 0=Mon, 1=Tue, 2=Wed, 3=Thu, 4=Fri, 5=Sat, 6=Sun
   booking_days: [2, 3, 4]   # Wednesday, Thursday, Friday
   days_ahead: 5             # Book 5 days into the future
-  start_time: "07:00"
-  end_time: "23:00"
+  start_time: "10:00"
+  end_time: "18:00"
 
 # Preferred desks in priority order (tried first before fallback to nearest)
 preferred_desks:
