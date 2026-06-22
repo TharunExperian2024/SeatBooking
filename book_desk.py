@@ -86,20 +86,25 @@ def calculate_target_date(config: dict) -> str | None:
 
 def calculate_next_week_target_dates(config: dict) -> list[str]:
     """
-    Calculate configured booking weekdays for the next calendar week.
-    Example: for [2,3,4], returns next week's Wed/Thu/Fri dates.
+    Calculate all upcoming configured booking weekdays within the bookable horizon.
+    Covers BOTH this week's remaining days AND next week's days.
+    This ensures that if Friday's run couldn't book (not open yet), Monday's run
+    will still pick up the current week's Wed/Thu/Fri plus next week's.
+    Already-booked dates are handled by the idempotency guard downstream.
     """
     schedule = config.get("schedule", {})
     booking_days = sorted(schedule.get("booking_days", [2, 3, 4]))
+    days_ahead = schedule.get("days_ahead", 5)
 
     today = datetime.now()
-    this_week_monday = today - timedelta(days=today.weekday())
-    next_week_monday = this_week_monday + timedelta(days=7)
-
+    # Scan from tomorrow through today + days_ahead + 7 (covers this week + next week)
+    horizon = days_ahead + 7
     target_dates = []
-    for weekday in booking_days:
-        target = next_week_monday + timedelta(days=weekday)
-        target_dates.append(target.strftime("%d %b %Y"))
+
+    for offset in range(1, horizon + 1):
+        candidate = today + timedelta(days=offset)
+        if candidate.weekday() in booking_days:
+            target_dates.append(candidate.strftime("%d %b %Y"))
 
     return target_dates
 
